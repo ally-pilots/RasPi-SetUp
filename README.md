@@ -356,6 +356,114 @@ python3 mqtt_simulator.py
 
 This will publish a new JSON telemetry message every 5 seconds, which can then be consumed by Node-RED, Grafana, or forwarded to Azure IoT Hub.
 
+---
+
+## Forwarding MQTT Sensor Data to Azure IoT Hub
+
+The simulator publishes JSON telemetry messages to the local MQTT broker under:
+
+`sensor/campus02-token`
+
+To send these MQTT messages to Azure IoT Hub, a small gateway script can be used.
+
+This enables the full pipeline:
+
+MQTT → Raspberry Pi → Azure IoT Hub → Cosmos DB
+
+---
+
+### Step 1: Install required packages
+
+Inside the Azure virtual environment:
+
+```bash
+source azure-env/bin/activate
+pip install azure-iot-device paho-mqtt
+```
+
+---
+
+### Step 2: Create the MQTT → Azure Forwarder Script
+
+Create a new file on the Raspberry Pi:
+
+```bash
+nano mqtt_to_azure.py
+```
+
+Paste the following code:
+
+```python
+from azure.iot.device import IoTHubDeviceClient, Message
+import paho.mqtt.client as mqtt
+
+# Azure IoT Hub device connection string
+CONNECTION_STRING = "YOUR_DEVICE_CONNECTION_STRING"
+
+# Create Azure IoT client
+azure_client = IoTHubDeviceClient.create_from_connection_string(CONNECTION_STRING)
+
+# Callback function: executed when an MQTT message is received
+def on_message(client, userdata, msg):
+    payload = msg.payload.decode()
+
+    print("Received from MQTT:", payload)
+
+    # Forward payload directly to Azure IoT Hub
+    message = Message(payload)
+    azure_client.send_message(message)
+
+    print("Forwarded to Azure IoT Hub!")
+
+# MQTT client setup
+mqtt_client = mqtt.Client()
+mqtt_client.on_message = on_message
+
+# Connect to local Mosquitto broker
+mqtt_client.connect("localhost", 1883)
+
+# Subscribe to simulator topic
+mqtt_client.subscribe("sensor/campus02-token")
+
+print("Listening for MQTT messages and forwarding to Azure...")
+
+# Run forever
+mqtt_client.loop_forever()
+```
+
+---
+
+### Step 3: Run the Forwarder
+
+Start the script:
+
+```bash
+source azure-env/bin/activate
+python3 mqtt_to_azure.py
+```
+
+---
+
+### Step 4: Run the Simulator
+
+In another terminal, start the simulator:
+
+```bash
+python3 mqtt_simulator.py
+```
+
+The forwarder will now receive MQTT messages and upload them to Azure IoT Hub in real time.
+
+---
+
+### Step 5: Verify Telemetry in Azure
+
+Telemetry can be monitored in the Azure Portal under:
+
+IoT Hub → Devices → Device Telemetry
+
+Once IoT Hub receives the messages, they can be routed into Cosmos DB using Message Routing.
+
 
 ## Step 11: Troubleshooting Notes
 
