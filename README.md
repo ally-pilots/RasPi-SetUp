@@ -265,6 +265,97 @@ Azure Cosmos DB provides cloud storage for telemetry data.
 IoT Hub telemetry can be routed into Cosmos DB using Message Routing.
 
 ---
+## Reference Sensor Data Format
+
+The MQTT payload format depends, so here I use one just as an example.
+
+---
+
+### MQTT Topic
+
+`sensor/campus02-token`
+
+---
+
+### Example Payload
+
+```json
+{
+  "deviceId": "campus02-token",
+  "timestamp": "2026-02-05T12:00:00Z",
+  "temperature": 22.5,
+  "pressure": 1013.2,
+  "gyroscope": {
+    "x": 0.01,
+    "y": 0.02,
+    "z":  0.00
+  },
+  "accelerometer": {
+    "x": 0.10,
+    "y": 0.00,
+    "z": 9.81
+  }
+}
+```
+
+This format is compatible with Node-RED processing, Grafana dashboards, and Azure IoT Hub telemetry storage.
+
+---
+
+## MQTT Sensor Data Simulator (Testing Without Hardware)
+
+To test the full MQTT → Node-RED → Grafana/Azure pipeline without requiring the physical token,
+a simple Python script can be used to simulate sensor measurements.
+
+### Install required package
+
+```bash
+pip install paho-mqtt
+```
+
+---
+
+### Example Simulator Script (`mqtt_simulator.py`)
+
+```python
+import paho.mqtt.client as mqtt
+import json, time, random
+from datetime import datetime
+
+# Connect to local Mosquitto broker
+client = mqtt.Client()
+client.connect("localhost", 1883)
+
+print("Publishing simulated sensor data...")
+
+while True:
+    payload = {
+        "deviceId": "campus02-token",
+        "timestamp": datetime.utcnow().isoformat(),
+        "temperature": round(20 + random.random() * 5, 2),
+        "pressure": round(1010 + random.random() * 5, 2),
+        "gyroscope": {"x": 0.01, "y": 0.02, "z": 0.00},
+        "accelerometer": {"x": 0.10, "y": 0.00, "z": 9.81}
+    }
+
+    # Publish JSON payload to MQTT topic
+    client.publish("sensor/campus02-token", json.dumps(payload))
+
+    print("Published:", payload)
+
+    time.sleep(5)
+```
+
+---
+
+### Run the simulator
+
+```bash
+python3 mqtt_simulator.py
+```
+
+This will publish a new JSON telemetry message every 5 seconds, which can then be consumed by Node-RED, Grafana, or forwarded to Azure IoT Hub.
+
 
 ## Step 11: Troubleshooting Notes
 
