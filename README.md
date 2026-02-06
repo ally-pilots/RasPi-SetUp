@@ -1,18 +1,18 @@
-# Raspberry Pi IoT Gateway Setup Guide  
-*CAMPUS 02 Token – MQTT – Node-RED – Grafana – Azure Cloud*
+# Raspberry Pi IoT Setup Guide  
+*Token – MQTT – Node-RED – Grafana – Azure Cloud*
 
 The Raspberry Pi provides:
 
 - MQTT communication (Mosquitto broker)
 - Data processing (Node-RED)
 - Real-time visualization (Grafana)
-- Optional cloud extension (Microsoft Azure IoT Hub + Cosmos DB)
+- Cloud extension (Microsoft Azure IoT Hub + Cosmos DB)
 
 ---
 
 ## System Overview
 
-The CAMPUS 02 Token includes the following sensors:
+The Token includes the following sensors:
 
 - Barometer (pressure)
 - Temperature sensor
@@ -20,12 +20,7 @@ The CAMPUS 02 Token includes the following sensors:
 - Accelerometer
 
 Sensor measurements are transmitted via MQTT to the Raspberry Pi, where they are processed and visualized locally.  
-Optionally, data can be forwarded to Microsoft Azure for cloud storage and analysis.
-
-Architecture:
-
-CAMPUS 02 Token → MQTT → Raspberry Pi Gateway → Node-RED → Grafana dashboards  
-                                                     ↘ Azure IoT Hub → Cosmos DB
+More so, data can be forwarded to Microsoft Azure for cloud storage and analysis.
 
 ---
 
@@ -45,7 +40,7 @@ After first boot:
 1. Set hostname (device name)
 2. Select timezone and language
 3. Create username and password
-4. Enable SSH
+4. Enable SSH (important if working headless)
 5. Configure Wi-Fi or Ethernet
 
 ---
@@ -128,7 +123,7 @@ mosquitto_sub -t test/topic
 Terminal 2 (publish):
 
 ```bash
-mosquitto_pub -t test/topic -m "hello raspberry pi"
+mosquitto_pub -t test/topic -m "hello World"
 ```
 
 ---
@@ -194,8 +189,130 @@ Grafana dashboards visualize:
 - Motion sensor data (gyro + accelerometer)
 
 ---
+## Step 7.5: Install and Configure InfluxDB (Grafana Data Source)
 
-## Step 8: Service Ports Summary
+Grafana does not read MQTT data directly. To visualize sensor values, a time-series database such as **InfluxDB** is required.
+
+InfluxDB stores incoming telemetry data, and Grafana queries it to build dashboards.
+
+---
+
+### Step 1: Install InfluxDB
+
+On the Raspberry Pi, install InfluxDB using:
+
+```bash
+sudo apt install -y influxdb
+```
+
+Enable and start the service:
+
+```bash
+sudo systemctl enable influxdb
+sudo systemctl start influxdb
+```
+
+Check status:
+
+```bash
+sudo systemctl status influxdb
+```
+
+---
+
+### Step 2: Create a Database for Sensor Data
+
+Open the InfluxDB shell:
+
+```bash
+influx
+```
+
+Create a database:
+
+```sql
+CREATE DATABASE sensorData;
+```
+
+Verify:
+
+```sql
+SHOW DATABASES;
+```
+
+Exit:
+
+```sql
+exit
+```
+
+---
+
+### Step 3: Send Data from Node-RED into InfluxDB
+
+In Node-RED:
+
+1. Subscribe to the MQTT topic (e.g., `sensor/campus02-token`)
+2. Parse the JSON payload
+3. Use the **InfluxDB Out** node to write values into the `sensorData` database
+
+Example measurement fields:
+
+- temperature
+- pressure
+- gyro_x, gyro_y, gyro_z
+- accel_x, accel_y, accel_z
+
+---
+
+### Step 4: Add InfluxDB as a Data Source in Grafana
+
+1. Open Grafana in the browser:
+
+```
+http://<pi-ip-address>:3000
+```
+
+2. Go to:
+
+**Settings → Data Sources → Add Data Source**
+
+3. Select:
+
+**InfluxDB**
+
+4. Configure:
+
+- URL: `http://localhost:8086`
+- Database: `sensorData`
+- Authentication: none (default local setup)
+
+5. Click:
+
+**Save & Test**
+
+---
+
+### Step 5: Build Dashboards
+
+Once InfluxDB is connected, Grafana panels can query measurements such as:
+
+```sql
+SELECT mean("temperature") FROM "sensor" WHERE $timeFilter GROUP BY time($__interval)
+```
+
+Dashboards can now display:
+
+- Real-time temperature graphs
+- Pressure trends
+- Motion sensor activity over time
+Node-RED acts as the bridge between MQTT and InfluxDB.
+---
+
+
+
+
+## Step 8: Service Ports
 
 | Service     | Port  | Purpose |
 |------------|------|---------|
@@ -218,7 +335,7 @@ https://azure.microsoft.com/free/students/
 ### Azure IoT Hub Setup
 
 1. Open Azure Portal  
-2. Create an **IoT Hub**
+2. Create an **IoT Hub** (important to choose a zone that works, West Europe or Switzerland should work)
 3. Register a device (e.g., `raspi-gateway`)
 4. Copy the device connection string
 
@@ -282,7 +399,7 @@ The MQTT payload format depends, so here I use one just as an example.
 ```json
 {
   "deviceId": "campus02-token",
-  "timestamp": "2026-02-05T12:00:00Z",
+  "timestamp": "2025-02-05T12:00:00Z",
   "temperature": 22.5,
   "pressure": 1013.2,
   "gyroscope": {
@@ -469,7 +586,7 @@ Once IoT Hub receives the messages, they can be routed into Cosmos DB using Mess
 
 - Mosquitto commands must be run on the Raspberry Pi terminal or via SSH.
 - If Grafana installation fails, verify repository setup.
-- Azure student subscriptions restrict deployment regions.
+- Azure student subscriptions restrict deployment regions (Swwitzerland and West Europe might work).
 - Python Azure SDK must be installed in a virtual environment.
 
 ---
